@@ -14,7 +14,7 @@ const API_BASE = "https://insideout-vask.onrender.com/api";
 
 export default function Scan() {
   const router = useRouter();
-  const { profile } = useLocalSearchParams();
+  const { profile, user_profile_id } = useLocalSearchParams();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const [torch, setTorch] = useState(false);
@@ -67,7 +67,8 @@ export default function Scan() {
         body: JSON.stringify({
           image_base64: base64,
           profile: profile || 'default',
-          product_category: 'default'
+          product_category: 'default',
+          user_profile_id: user_profile_id || null
         })
       });
       if (!res.ok) {

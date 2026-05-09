@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { saveScanToDB } from '../src/db';
 import Svg, { Circle } from 'react-native-svg';
 import { BlurView } from 'expo-blur';
-import { ArrowLeft, RotateCcw, Baby, Dumbbell, Sparkles, CheckCircle2, AlertTriangle, ShieldAlert, ChevronDown, ChevronUp, Leaf, MapPin } from 'lucide-react-native';
+import { ArrowLeft, RotateCcw, Baby, Dumbbell, Sparkles, CheckCircle2, AlertTriangle, ShieldAlert, ChevronDown, ChevronUp, Leaf, MapPin, Barcode, FlaskConical, Award, Zap } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../src/theme';
 
@@ -258,6 +258,98 @@ export default function Results() {
           })}
         </View>
 
+        {/* ── HEALTH PROFILE ALERTS ── */}
+        {scan.profile_alerts && scan.profile_alerts.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>⚠️ Health Profile Alerts</Text>
+            {scan.profile_alerts.map((alert: any, idx: number) => (
+              <View key={idx} style={styles.alertCard}>
+                <Text style={styles.alertLabel}>{alert.label}</Text>
+                <Text style={styles.alertMsg}>{alert.message}</Text>
+                <View style={styles.alertItemsRow}>
+                  {alert.flagged_items.map((item: string, i: number) => (
+                    <View key={i} style={styles.alertChip}>
+                      <Text style={styles.alertChipText}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
+          </>
+        )}
+
+        {/* ── NUTRITION FACTS ── */}
+        {scan.nutrition && Object.keys(scan.nutrition).some(k => scan.nutrition[k] != null) && (
+          <>
+            <Text style={styles.sectionTitle}><Zap size={18} color={theme.colors.textPrimary} /> Nutrition Facts</Text>
+            <View style={styles.nutritionCard}>
+              {[
+                { key: 'energy_kcal', label: 'Energy', unit: 'kcal' },
+                { key: 'carbohydrates', label: 'Carbohydrates', unit: 'g' },
+                { key: 'sugars', label: 'Of which Sugars', unit: 'g' },
+                { key: 'fat', label: 'Total Fat', unit: 'g' },
+                { key: 'saturated_fat', label: 'Saturated Fat', unit: 'g' },
+                { key: 'protein', label: 'Protein', unit: 'g' },
+                { key: 'fiber', label: 'Dietary Fibre', unit: 'g' },
+                { key: 'sodium', label: 'Sodium', unit: 'mg' },
+              ].filter(r => scan.nutrition[r.key] != null).map((row, i) => (
+                <View key={row.key} style={[styles.nutritionRow, i % 2 === 0 && styles.nutritionRowAlt]}>
+                  <Text style={styles.nutritionLabel}>{row.label}</Text>
+                  <Text style={styles.nutritionValue}>{Number(scan.nutrition[row.key]).toFixed(1)}{row.unit}</Text>
+                </View>
+              ))}
+              <Text style={styles.nutritionFootnote}>Values per 100g from Open Food Facts</Text>
+            </View>
+          </>
+        )}
+
+        {/* ── ADDITIVES DECODED ── */}
+        {scan.additives && scan.additives.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}><FlaskConical size={18} color={theme.colors.textPrimary} /> Additives Decoded</Text>
+            <View style={styles.ingList}>
+              {scan.additives.map((add: any, idx: number) => {
+                const stheme = theme.colors.status[add.status as keyof typeof theme.colors.status] || theme.colors.status.safe;
+                return (
+                  <View key={idx} style={styles.ingRow}>
+                    <View style={styles.ingHeader}>
+                      <View style={[styles.ecodeBadge, { backgroundColor: stheme.bg }]}>
+                        <Text style={[styles.ecodeText, { color: stheme.color }]}>{add.code}</Text>
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={styles.ingName}>{add.name}</Text>
+                        <Text style={styles.ingPlain}>{add.plain}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        {/* ── CERTIFICATIONS ── */}
+        {scan.certifications && scan.certifications.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}><Award size={18} color={theme.colors.textPrimary} /> Certifications</Text>
+            <View style={styles.certsRow}>
+              {scan.certifications.map((cert: string, idx: number) => (
+                <View key={idx} style={styles.certChip}>
+                  <Text style={styles.certText}>✓ {cert}</Text>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* ── BARCODE INFO ── */}
+        {scan.barcode && (
+          <View style={styles.barcodeRow}>
+            <Barcode size={16} color={theme.colors.textSecondary} />
+            <Text style={styles.barcodeText}>Barcode: {scan.barcode}</Text>
+          </View>
+        )}
+
         {/* Better Alternatives */}
         {scan.alternatives && scan.alternatives.length > 0 && (
           <>
@@ -281,7 +373,7 @@ export default function Results() {
         )}
 
         <Text style={styles.xaiFooter}>
-          Every claim above is cross-referenced with WHO Guidelines & FDA Regulations. InsideOut KB v1.0.
+          Every claim above is cross-referenced with WHO Guidelines & FDA Regulations. InsideOut KB v2.0.
         </Text>
       </ScrollView>
     </View>
@@ -388,4 +480,40 @@ const styles = StyleSheet.create({
   altWhere: { ...theme.typography.caption, fontSize: 12, marginLeft: 4 },
 
   xaiFooter: { ...theme.typography.caption, fontSize: 12, fontStyle: 'italic', textAlign: 'center', marginTop: theme.spacing.md },
+
+  // Health Profile Alerts
+  alertCard: {
+    backgroundColor: '#FFF3CD', borderRadius: theme.radii.card,
+    padding: theme.spacing.md, marginBottom: theme.spacing.sm,
+    borderWidth: 1, borderColor: '#F59E0B', borderLeftWidth: 4, borderLeftColor: '#F59E0B',
+  },
+  alertLabel: { fontWeight: '800', fontSize: 15, color: '#92400E', marginBottom: 4 },
+  alertMsg: { ...theme.typography.body, fontSize: 13, color: '#78350F', marginBottom: 8 },
+  alertItemsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  alertChip: { backgroundColor: '#FDE68A', paddingHorizontal: 8, paddingVertical: 3, borderRadius: theme.radii.badge },
+  alertChipText: { fontSize: 12, fontWeight: '700', color: '#92400E' },
+
+  // Nutrition Facts
+  nutritionCard: {
+    backgroundColor: theme.colors.surface, borderRadius: theme.radii.card,
+    borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden', marginBottom: theme.spacing.xl,
+  },
+  nutritionRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: theme.spacing.md, paddingVertical: 10 },
+  nutritionRowAlt: { backgroundColor: theme.colors.bg },
+  nutritionLabel: { ...theme.typography.body, fontSize: 14, color: theme.colors.textPrimary },
+  nutritionValue: { ...theme.typography.subheading, fontSize: 14 },
+  nutritionFootnote: { ...theme.typography.caption, fontSize: 11, fontStyle: 'italic', textAlign: 'center', padding: theme.spacing.sm, borderTopWidth: 1, borderTopColor: theme.colors.border },
+
+  // Additives
+  ecodeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: theme.radii.badge, alignSelf: 'flex-start' },
+  ecodeText: { fontWeight: '800', fontSize: 13 },
+
+  // Certifications
+  certsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: theme.spacing.xl },
+  certChip: { backgroundColor: theme.colors.mintSoft, paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.radii.badge, borderWidth: 1, borderColor: theme.colors.mint },
+  certText: { color: theme.colors.mint, fontWeight: '700', fontSize: 12 },
+
+  // Barcode
+  barcodeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: theme.spacing.lg },
+  barcodeText: { ...theme.typography.caption, fontSize: 12, color: theme.colors.textSecondary },
 });
