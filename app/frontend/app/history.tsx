@@ -7,9 +7,7 @@ import { theme } from '../src/theme';
 
 import { Platform } from 'react-native';
 
-const API_BASE = Platform.OS === 'web' 
-  ? "http://localhost:8000/api" 
-  : "https://pretemperately-unwakening-nathalie.ngrok-free.dev/api";
+const API_BASE = "https://insideout-vask.onrender.com/api";
 
 export default function HistoryScreen() {
   const router = useRouter();
