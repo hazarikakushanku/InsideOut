@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl, ActivityIndicator, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { History as HistoryIcon, ArrowLeft } from 'lucide-react-native';
+import { History as HistoryIcon, ArrowLeft, Trash2 } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../src/theme';
 
@@ -19,9 +19,7 @@ export default function HistoryScreen() {
 
   const fetchScans = async () => {
     try {
-      const res = await fetch(`${API_BASE}/scans?limit=30`, {
-        headers: { 'ngrok-skip-browser-warning': 'true' }
-      });
+      const res = await fetch(`${API_BASE}/scans?limit=50`);
       const data = await res.json();
       setScans(data);
     } catch (e) {
@@ -30,6 +28,24 @@ export default function HistoryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
+  };
+
+  const clearAllHistory = () => {
+    Alert.alert(
+      '🗑️ Clear All History',
+      'This will permanently delete all your scan history. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete All', style: 'destructive', onPress: async () => {
+          try {
+            await fetch(`${API_BASE}/scans`, { method: 'DELETE' });
+            setScans([]);
+          } catch (e) {
+            Alert.alert('Error', 'Could not delete history.');
+          }
+        }}
+      ]
+    );
   };
 
   useFocusEffect(
@@ -90,7 +106,13 @@ export default function HistoryScreen() {
           <ArrowLeft size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Scan History</Text>
-        <View style={styles.iconBtnPlaceholder} />
+        {scans.length > 0 ? (
+          <TouchableOpacity onPress={clearAllHistory} style={styles.iconBtn} testID="clear-history-btn">
+            <Trash2 size={22} color={theme.colors.status.risky.color} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.iconBtnPlaceholder} />
+        )}
       </View>
 
       {loading && scans.length === 0 ? (

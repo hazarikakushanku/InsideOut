@@ -503,3 +503,124 @@ async def delete_scan(id: str):
     res = supabase.table("scans").delete().eq("id", id).execute()
     if not res.data: raise HTTPException(status_code=404, detail="Scan not found")
     return {"ok": True}
+
+@app.delete("/api/scans")
+async def delete_all_scans():
+    """Delete all scan history."""
+    if not supabase: raise HTTPException(status_code=404, detail="Supabase not configured")
+    supabase.table("scans").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+    return {"ok": True, "message": "All scans deleted"}
+
+class BarcodeAnalyzeRequest(BaseModel):
+    barcode: str
+    profile: str = "default"
+    user_profile_id: Optional[str] = None
+    product_data: Optional[Dict[str, Any]] = None
+
+@app.post("/api/analyze-barcode", response_model=ScanRecord)
+async def analyze_barcode(req: BarcodeAnalyzeRequest):
+    """Analyze a product using barcode data from Open Food Facts."""
+    product_data = req.product_data or lookup_barcode(req.barcode)
+    if not product_data:
+        raise HTTPException(status_code=404, detail="Product not found")
+
+    prod_cat = "food"
+    nutrition = product_data.get("nutrition", {})
+    off_certifications = product_data.get("certifications", [])
+    ing_text = product_data.get("ingredients_text", "")
+    ingredients_list = [i.strip() for i in ing_text.replace(";", ",").split(",") if i.strip()][:25]
+    additives = decode_ecodes(ingredients_list + [ing_text])
+
+    findings: List[IngredientFinding] = []
+    risky_count = 0; caution_count = 0
+
+    for ing in ingredients_list:
+        ing_lower = ing.lower()
+        db_match = None
+        if supabase:
+            try:
+                res = supabase.table("ingredients").select("*").eq("name", ing_lower).execute()
+                if res.data: db_match = res.data[0]
+            except: pass
+
+        if db_match:
+            status = db_match.get("status", "safe")
+            if status == "risky": risky_count += 1
+            elif status == "caution": caution_count += 1
+            findings.append(IngredientFinding(name=ing, status=status, plain=db_match.get("plain", ""), citation="Database Cache", tags=db_match.get("tags", [])))
+            continue
+
+        kb_match = lookup(ing)
+        if kb_match:
+            status = kb_match["status"]
+            if status == "risky": risky_count += 1
+            elif status == "caution": caution_count += 1
+            db_doc = {"name": ing_lower, "status": status, "plain": kb_match["plain"], "citation": kb_match["citation"], "tags": kb_match["tags"]}
+            if supabase:
+                try: supabase.table("ingredients").upsert(db_doc).execute()
+                except: pass
+            findings.append(IngredientFinding(name=ing, status=status, plain=kb_match["plain"], citation=kb_match["citation"], tags=kb_match["tags"]))
+            continue
+
+        # AI fallback
+        try:
+            t3_prompt = f"Analyze the food ingredient '{ing}' for health risks. Return STRICT JSON: {{\"status\": \"safe|caution|risky\", \"reason\": \"brief explanation\"}}"
+            t3_response = model.generate_content(t3_prompt)
+            t3_text = t3_response.text.strip()
+            for prefix in ["```json", "```"]:
+                if t3_text.startswith(prefix): t3_text = t3_text[len(prefix):]
+            if t3_text.endswith("```"): t3_text = t3_text[:-3]
+            t3_parsed = json.loads(t3_text.strip())
+            t3_status = t3_parsed.get("status", "caution")
+            if t3_status == "risky": risky_count += 1
+            elif t3_status == "caution": caution_count += 1
+            db_doc = {"name": ing_lower, "status": t3_status, "plain": t3_parsed.get("reason", ""), "citation": "Gemini AI", "tags": ["tier3"]}
+            if supabase:
+                try: supabase.table("ingredients").upsert(db_doc).execute()
+                except: pass
+            findings.append(IngredientFinding(name=ing, status=t3_status, plain=db_doc["plain"], citation=db_doc["citation"], tags=db_doc["tags"]))
+        except:
+            findings.append(IngredientFinding(name=ing, status="safe", plain="No hazard data found.", citation="Unlisted", tags=[]))
+
+    health_score = max(5, min(100, 100 - (18 * risky_count) - (7 * caution_count)))
+    overall_status = "safe" if health_score >= 75 else ("caution" if health_score >= 45 else "risky")
+
+    categories: List[CategoryBreakdown] = []
+    for cat in ["kids", "fitness", "sensitive_skin"]:
+        cat_risky = 0; cat_caution = 0; flagged = []
+        for f in findings:
+            if cat in f.tags:
+                if f.status == "risky": cat_risky += 1; flagged.append(f.name)
+                elif f.status == "caution": cat_caution += 1; flagged.append(f.name)
+        cat_score = max(5, min(100, 100 - (20 * cat_risky) - (8 * cat_caution)))
+        cat_status = "safe" if cat_score >= 75 else ("caution" if cat_score >= 45 else "risky")
+        hl = "Looks good" if cat_status == "safe" else ("Use with caution" if cat_status == "caution" else "High risk detected")
+        categories.append(CategoryBreakdown(category=cat, score=cat_score, status=cat_status, headline=hl, flagged=flagged[:5]))
+
+    alts = [Alternative(**a) for a in ALTERNATIVES.get(prod_cat, ALTERNATIVES["default"])] if overall_status == "risky" else []
+    clean_certs = [c.replace("en:", "").replace("-", " ").title() for c in off_certifications if c]
+
+    profile_alerts: List[ProfileAlert] = []
+    if req.user_profile_id and supabase:
+        try:
+            up_res = supabase.table("user_profiles").select("*").eq("id", req.user_profile_id).execute()
+            if up_res.data:
+                profile_alerts = check_health_profile(findings, up_res.data[0], nutrition, additives)
+        except Exception as e:
+            print(f"Profile fetch error: {e}")
+
+    scan_record = ScanRecord(
+        id=str(uuid.uuid4()), profile=req.profile,
+        product_name=product_data.get("product_name", "Unknown Product"),
+        product_category=prod_cat, health_score=health_score, overall_status=overall_status,
+        ingredients=findings, categories=categories, alternatives=alts,
+        summary=f"{risky_count} high-risk, {caution_count} caution-level ingredients detected.",
+        raw_text=ing_text, created_at=datetime.now(timezone.utc).isoformat(),
+        barcode=req.barcode, nutrition=nutrition, certifications=clean_certs,
+        additives=additives, profile_alerts=profile_alerts, user_profile_id=req.user_profile_id,
+    )
+    scan_dict = scan_record.model_dump()
+    if supabase:
+        try: supabase.table("scans").insert(scan_dict).execute()
+        except Exception as e: print("Supabase insert error:", e)
+    return scan_record
