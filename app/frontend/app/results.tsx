@@ -230,32 +230,39 @@ export default function Results() {
         {/* Ingredients Breakdown */}
         <Text style={styles.sectionTitle}>Ingredient Breakdown</Text>
         <View style={styles.ingList} testID="ingredient-list">
-          {scan.ingredients.map((ing: any) => {
-            const stheme = theme.colors.status[ing.status as keyof typeof theme.colors.status];
-            const isExpanded = expandedIngs[ing.name];
-            return (
-              <TouchableOpacity 
-                key={ing.name} 
-                style={styles.ingRow} 
-                onPress={() => toggleIng(ing.name)}
-                testID={`ingredient-row-${ing.name.replace(/\s+/g, '-')}`}
-              >
-                <View style={styles.ingHeader}>
-                  <View style={styles.ingIconName}>
-                    {getStatusIcon(ing.status, 20, stheme.color)}
-                    <Text style={styles.ingName}>{ing.name}</Text>
+          {scan.ingredients && scan.ingredients.length > 0 ? (
+            scan.ingredients.map((ing: any) => {
+              const stheme = theme.colors.status[ing.status as keyof typeof theme.colors.status];
+              const isExpanded = expandedIngs[ing.name];
+              return (
+                <TouchableOpacity
+                  key={ing.name}
+                  style={styles.ingRow}
+                  onPress={() => toggleIng(ing.name)}
+                  testID={`ingredient-row-${ing.name.replace(/\s+/g, '-')}`}
+                >
+                  <View style={styles.ingHeader}>
+                    <View style={styles.ingIconName}>
+                      {getStatusIcon(ing.status, 20, stheme.color)}
+                      <Text style={styles.ingName}>{ing.name}</Text>
+                    </View>
+                    {isExpanded ? <ChevronUp size={20} color={theme.colors.textMuted} /> : <ChevronDown size={20} color={theme.colors.textMuted} />}
                   </View>
-                  {isExpanded ? <ChevronUp size={20} color={theme.colors.textMuted} /> : <ChevronDown size={20} color={theme.colors.textMuted} />}
-                </View>
-                {isExpanded && (
-                  <View style={styles.ingDetails}>
-                    <Text style={styles.ingPlain}>{ing.plain}</Text>
-                    <Text style={styles.ingCitation}>Source: {ing.citation}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
+                  {isExpanded && (
+                    <View style={styles.ingDetails}>
+                      <Text style={styles.ingPlain}>{ing.plain}</Text>
+                      <Text style={styles.ingCitation}>Source: {ing.citation}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })
+          ) : (
+            <View style={styles.emptyIngredients}>
+              <Text style={styles.emptyIngredientsTitle}>⚠️ No ingredients detected</Text>
+              <Text style={styles.emptyIngredientsDesc}>The AI could not extract ingredients from this image. Try scanning again with better lighting, or upload a clearer photo of the ingredients label.</Text>
+            </View>
+          )}
         </View>
 
         {/* ── HEALTH PROFILE ALERTS ── */}
@@ -464,6 +471,9 @@ const styles = StyleSheet.create({
   ingDetails: { marginTop: theme.spacing.sm, paddingLeft: 32 },
   ingPlain: { ...theme.typography.body, fontSize: 14, marginBottom: 4 },
   ingCitation: { ...theme.typography.caption, fontSize: 12, fontStyle: 'italic' },
+  emptyIngredients: { padding: theme.spacing.xl, alignItems: 'center' },
+  emptyIngredientsTitle: { ...theme.typography.subheading, fontSize: 16, marginBottom: 8, color: '#F59E0B' },
+  emptyIngredientsDesc: { ...theme.typography.body, fontSize: 14, textAlign: 'center', lineHeight: 22 },
 
   altScroll: { gap: theme.spacing.md, paddingRight: theme.spacing.lg, marginBottom: theme.spacing.xl },
   altCard: {

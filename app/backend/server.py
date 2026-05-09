@@ -25,10 +25,10 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", os.getenv("EMERGENT_LLM_KEY"))
 genai.configure(api_key=GEMINI_API_KEY)
-try:
-    model = genai.GenerativeModel('gemini-2.5-flash')
-except Exception:
-    model = genai.GenerativeModel('gemini-1.5-flash')
+# Use gemini-1.5-flash - stable, widely supported
+MODEL_NAME = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+model = genai.GenerativeModel(MODEL_NAME)
+print(f"Using Gemini model: {MODEL_NAME}")
 
 app = FastAPI()
 app.add_middleware(
@@ -518,9 +518,17 @@ async def delete_scan(id: str):
 @app.delete("/api/scans")
 async def delete_all_scans():
     """Delete all scan history."""
-    if not supabase: raise HTTPException(status_code=404, detail="Supabase not configured")
-    supabase.table("scans").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
-    return {"ok": True, "message": "All scans deleted"}
+    if not supabase: raise HTTPException(status_code=503, detail="Supabase not configured")
+    try:
+        # Fetch all IDs first then delete them
+        res = supabase.table("scans").select("id").execute()
+        if res.data:
+            for scan in res.data:
+                supabase.table("scans").delete().eq("id", scan["id"]).execute()
+        return {"ok": True, "deleted": len(res.data) if res.data else 0}
+    except Exception as e:
+        print("Delete all error:", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 class BarcodeAnalyzeRequest(BaseModel):
     barcode: str

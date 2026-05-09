@@ -124,12 +124,25 @@ export default function Scan() {
     }
   }, [barcodeProcessing, profile, user_profile_id]);
 
+  const [isCapturing, setIsCapturing] = useState(false);
+
   const takePicture = async () => {
-    if (!cameraRef.current) return;
+    if (!cameraRef.current || isCapturing) return;
+    setIsCapturing(true);
     try {
-      const photo = await cameraRef.current.takePictureAsync({ quality: 0.9, base64: true });
+      // Small delay to allow autofocus to settle
+      await new Promise(resolve => setTimeout(resolve, 400));
+      const photo = await cameraRef.current.takePictureAsync({
+        quality: 1.0,
+        base64: true,
+        skipProcessing: false,
+      });
       if (photo?.base64) await handleAnalyze(photo.base64);
-    } catch (e) { console.log(e); }
+    } catch (e) {
+      console.log('Camera error:', e);
+    } finally {
+      setIsCapturing(false);
+    }
   };
 
   const pickImage = async () => {
