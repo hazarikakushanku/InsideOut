@@ -25,7 +25,10 @@ if SUPABASE_URL and SUPABASE_KEY:
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", os.getenv("EMERGENT_LLM_KEY"))
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+try:
+    model = genai.GenerativeModel('gemini-2.5-flash')
+except Exception:
+    model = genai.GenerativeModel('gemini-1.5-flash')
 
 app = FastAPI()
 app.add_middleware(
@@ -310,10 +313,18 @@ async def analyze(req: AnalyzeRequest):
         if text.endswith("```"): text = text[:-3]
         parsed = json.loads(text.strip())
     except Exception as e:
+        import traceback
         print(f"Gemini parsing error: {e}")
-        parsed = {"product_name": "Unknown Product", "product_category": req.product_category or "default",
-                  "raw_text": "Failed to parse.", "ingredients": [], "barcode": None, "certifications": []}
-
+        print(traceback.format_exc())
+        # Fallback
+        parsed = {
+            "product_name": "Unknown Product",
+            "product_category": req.product_category or "default",
+            "raw_text": f"Gemini error: {str(e)}",
+            "ingredients": [],
+            "barcode": None,
+            "certifications": []
+        }
     prod_cat = parsed.get("product_category", "default")
     if prod_cat not in ALTERNATIVES:
         prod_cat = "default"
